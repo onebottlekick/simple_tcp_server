@@ -1,23 +1,53 @@
+import threading
 import socket
 
-# server ipv4
-HOST = '<own ipv4 address>'
+HOST = 'localhost'
 PORT = 9090
 
-# use tcp socket
-# just connection socket
 server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 server.bind((HOST, PORT))
+server.listen()
 
-server.listen(2)
+clients = []
+nicknames = []
 
-while True:
-    # communication socket
-    communication_socket, address = server.accept()
-    print(f"connetcted to {address}")
-    message = communication_socket.recv(1024).decode('utf-8')
-    print(f"message from client is: {message}")
-    communication_socket.send("from server: I got your message".encode('utf-8'))    
-    communication_socket.close()
-    print(f"connection with {address} ended")
-    break
+def broadcast(message):
+    for client in clients:
+        client.send(message)
+    
+def handle(client):
+    while True:
+        try:
+            message = client.recv(1024)
+            broadcast(message)
+        except Exception:
+            index = clients.index(client)
+            clients.remove(client)
+            client.close()
+            nickname = nicknames[index]
+            broadcast(f'{nickname} left.\n'.encode('ascii'))
+            nicknames.remove(nickname)
+            break
+
+def receive():
+    while  True:
+        client, address = server.accept()
+        print(f'connected with {str(address)}')
+
+        client.send('nickname'.encode('ascii'))
+        nickname = client.recv(1024).decode('ascii')
+        nicknames.append(nickname)
+        clients.append(client)
+
+        print(f'nickname of the client is {nickname}')
+        print(f'current clients: {nicknames}\n')
+
+        broadcast(f'{nickname} joined'.encode('ascii'))
+
+        client.send('connected to server\n'.encode('ascii'))
+
+        thread = threading.Thread(target=handle, args=(client, ))
+        thread.start()
+
+print('listening..')
+receive()
